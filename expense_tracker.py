@@ -64,8 +64,11 @@ def load_expenses(filename):
         except decimal.InvalidOperation as e:
             print(f"Expense {label} has an invalid amount: {e}", file=sys.stderr)
             sys.exit(1)
-        except (ValueError, TypeError) as e:
+        except ValueError as e:
             print(f"Expense {label} has an invalid datetime value: {e}", file=sys.stderr)
+            sys.exit(1)
+        except TypeError as e:
+            print(f"has a value of the wrong type: {e}", file=sys.stderr)
             sys.exit(1)
 
     return parsed_expenses
