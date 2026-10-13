@@ -1,11 +1,9 @@
 from datetime import datetime
 from pathlib import Path
-import decimal, json, sys, os, argparse
+import decimal, json, sys, os, argparse, calendar
 
 FILENAME = Path(__file__).parent / ".expenses-data" / "expenses.json"
 REQUIRED_KEYS = ("id", "description", "amount", "created_at", "updated_at")
-VALID_COMMNADS = ("add", "list", "delete", "summary")
-
 
 def parse_expense(expense):
     for key in REQUIRED_KEYS:
@@ -179,6 +177,36 @@ def delete_expense(expenses, expense_id):
     expense = find_expense(expenses, expense_id)
     expenses.remove(expense)
     return expense
+
+def parse_month(input_text):
+    try:
+        month = int(input_text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Month must be a whole number between 1 and 12.")
+    if month < 1 or month > 12:
+        raise argparse.ArgumentTypeError("Month must be a whole number greater than 0 and less than 12.")
+    return month
+
+def calculate_total(expenses, month=None):
+    curr_year = datetime.now().year
+    amount_list = []
+    total = 0
+    if month is None:
+        for expense in expenses:
+            amount_list.append(expense["amount"])
+        total = sum(amount_list)
+    else:
+        for expense in expenses:
+            date = expense["created_at"]
+            date_year = date.year
+            date_month = date.month
+            if date_year == curr_year and date_month == month:
+                amount_list.append(expense["amount"])
+        total = sum(amount_list)
+    return total
+
+        
+
 def build_parser():
 # Define a clean description and example usage
     description = (
@@ -210,6 +238,8 @@ def build_parser():
     del_option = sub_parser.add_parser(name="delete")
     del_option.add_argument("--id", required=True, type=parse_id)
 
+    summary_option = sub_parser.add_parser(name="summary")
+    summary_option.add_argument("--month", required=False, type=parse_month)
     return parser
 
 def main():
@@ -219,18 +249,25 @@ def main():
     expenses = load_expenses()
     if command == "list":
         list_expenses(expenses)
-    if command == "add":
+    elif command == "add":
         description = args.description
         amount = args.amount
         new_expense = add_expense(expenses, description, amount)
         save_expenses(expenses)
         print(f"Expense added successfully (ID: {new_expense["id"]})")
-    if command == "delete":
+    elif command == "delete":
         expense_id = args.id
         deleted_expense = delete_expense(expenses, expense_id)
         save_expenses(expenses)
-        print(f"Expense deleted successfully (ID: {deleted_expense["id"]})")
-        
+        print(f"Expense deleted successfully (ID: {deleted_expense['id']})")
+    elif command == "summary":
+        month = args.month
+        total = calculate_total(expenses, month)
+        if month is None:
+            print(f"Total expenses: {format_amount(total)}")
+        else:
+            month_name = calendar.month_name[month]
+            print(f"Total expenses for {month_name}: {format_amount(total)}")
 if __name__ == "__main__":
     main()
 
