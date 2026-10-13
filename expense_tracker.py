@@ -4,6 +4,7 @@ import decimal, json, sys, os, argparse
 
 FILENAME = Path(__file__).parent / ".expenses-data" / "expenses.json"
 REQUIRED_KEYS = ("id", "description", "amount", "created_at", "updated_at")
+VALID_COMMNADS = ("add", "list", "delete", "summary")
 
 
 def parse_expense(expense):
@@ -149,7 +150,7 @@ def print_expense(expense, desc_width):
     description = expense["description"]
     amount = format_amount(expense["amount"])
     date = format_date(expense["created_at"])
-    print(f"ID: {expense_id} || Date: {date} || Description: {description:<{desc_width}} || Amount: {amount}")
+    print(f"ID: {expense_id} || Date: {date} || Description: {description:<{desc_width}} || Amount: {amount:<10}||")
 
 def list_expenses(expenses):
     if not expenses:
@@ -158,6 +159,78 @@ def list_expenses(expenses):
     description_width = calculate_description_width(expenses)
     for expense in expenses:
         print_expense(expense, description_width)
+def parse_id(input_id):
+    try:
+        input_id = int(input_id)
+    except ValueError:
+        raise argparse.ArgumentTypeError("ID must be a whole number.")
+    if input_id <= 0:
+        raise argparse.ArgumentTypeError("ID must be a positive number greater than zero.")
+    return input_id
 
+def find_expense(expenses, expense_id):
+    for expense in expenses:
+        if expense["id"] == expense_id:
+            return expense
+        
+    print(f"Expense with ID {expense_id} not found.", file=sys.stderr)
+    sys.exit(1)
+def delete_expense(expenses, expense_id):
+    expense = find_expense(expenses, expense_id)
+    expenses.remove(expense)
+    return expense
+def build_parser():
+# Define a clean description and example usage
+    description = (
+        "A CLI Expense Tracker to manage personal finances by adding, deleting, "
+        "listing, and summarizing expenses with monthly filtering capabilities."
+    )
 
+    epilog = """
+    examples:
+    $ expense-tracker add --description "Lunch" --amount 20
+    $ expense-tracker list
+    $ expense-tracker summary --month 8
+    $ expense-tracker delete --id 2
+    """
+
+    # RawDescriptionHelpFormatter preserves the formatting of your epilog examples
+    parser = argparse.ArgumentParser(
+        description=description,
+        epilog=epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    sub_parser = parser.add_subparsers(dest="command", required=True)
+    add_option = sub_parser.add_parser(name="add")
+    add_option.add_argument("--description", required=True, type=parse_description)
+    add_option.add_argument("--amount", required=True, type=parse_amount)
+
+    sub_parser.add_parser(name="list")
+
+    del_option = sub_parser.add_parser(name="delete")
+    del_option.add_argument("--id", required=True, type=parse_id)
+
+    return parser
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    command = args.command
+    expenses = load_expenses()
+    if command == "list":
+        list_expenses(expenses)
+    if command == "add":
+        description = args.description
+        amount = args.amount
+        new_expense = add_expense(expenses, description, amount)
+        save_expenses(expenses)
+        print(f"Expense added successfully (ID: {new_expense["id"]})")
+    if command == "delete":
+        expense_id = args.id
+        deleted_expense = delete_expense(expenses, expense_id)
+        save_expenses(expenses)
+        print(f"Expense deleted successfully (ID: {deleted_expense["id"]})")
+        
+if __name__ == "__main__":
+    main()
 
