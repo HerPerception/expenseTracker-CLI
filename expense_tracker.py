@@ -184,7 +184,7 @@ def parse_month(input_text):
     except ValueError:
         raise argparse.ArgumentTypeError("Month must be a whole number between 1 and 12.")
     if month < 1 or month > 12:
-        raise argparse.ArgumentTypeError("Month must be a whole number greater than 0 and less than 12.")
+        raise argparse.ArgumentTypeError("Month must be a whole number between 1 and 12.")
     return month
 
 def calculate_total(expenses, month=None):
@@ -254,7 +254,7 @@ def main():
         amount = args.amount
         new_expense = add_expense(expenses, description, amount)
         save_expenses(expenses)
-        print(f"Expense added successfully (ID: {new_expense["id"]})")
+        print(f"Expense added successfully (ID: {new_expense['id']})")
     elif command == "delete":
         expense_id = args.id
         deleted_expense = delete_expense(expenses, expense_id)
