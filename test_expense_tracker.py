@@ -2,11 +2,20 @@ import unittest
 from unittest.mock import patch, mock_open
 import decimal
 import json
+import argparse
 from datetime import datetime
 from pathlib import Path
 
-# Import your exact functions
-from expense_tracker import parse_expense, load_expenses, save_expenses
+# Import your exact production functions from expense_tracker.py
+from expense_tracker import (
+    parse_expense, 
+    load_expenses, 
+    save_expenses,
+    parse_amount,
+    parse_description,
+    generate_id,
+    add_expense
+)
 
 class TestExpenseTracker(unittest.TestCase):
 
@@ -80,15 +89,11 @@ class TestExpenseTracker(unittest.TestCase):
     @patch("builtins.open", new_callable=mock_open, read_data="invalid json string")
     def test_load_expenses_invalid_json(self, mock_file, mock_exit):
         """Should call sys.exit(1) if the JSON layout is corrupted."""
-        # Suppress stderr printing to keep test outputs clean
         with patch("sys.stderr.write"):
-            # Since sys.exit is mocked, your code will try to continue and raise UnboundLocalError.
-            # We catch that here to verify that sys.exit(1) was triggered first.
             try:
                 load_expenses("mock_corrupt.json")
             except UnboundLocalError:
                 pass
-        
         mock_exit.assert_called_once_with(1)
 
     # ==========================================
@@ -101,15 +106,104 @@ class TestExpenseTracker(unittest.TestCase):
     def test_save_expenses_success(self, mock_file, mock_mkdir, mock_replace):
         """Should convert native objects to strings and save them cleanly to disk."""
         result = save_expenses([self.parsed_expense], "mock_save.json")
-        
-        # Matches your exact code, which implicitly returns None on successful save paths
         self.assertIsNone(result)
-        
-        # Asserts that the code attempts to open the correct temp filename format
         mock_file.assert_called_with(Path("mock_save.json.tmp"), "w", encoding="utf-8")
+
+    # ==========================================
+    # 4. TESTS FOR parse_amount
+    # ==========================================
+
+    def test_parse_amount_valid(self):
+        """Should return a Decimal object for clean valid amounts."""
+        self.assertEqual(parse_amount("20.50"), decimal.Decimal("20.50"))
+        self.assertEqual(parse_amount("10"), decimal.Decimal("10"))
+
+    def test_parse_amount_not_a_number(self):
+        """Should raise ArgumentTypeError if input isn't a valid numeric string."""
+        with self.assertRaises(argparse.ArgumentTypeError) as ctx:
+            parse_amount("abc")
+        self.assertEqual(str(ctx.exception), "Amount must be a number.")
+
+    def test_parse_amount_infinite(self):
+        """Should raise ArgumentTypeError if input represents Infinity or NaN."""
+        with self.assertRaises(argparse.ArgumentTypeError) as ctx:
+            parse_amount("Infinity")
+        self.assertEqual(str(ctx.exception), "Amount must be a finite number.")
+
+    def test_parse_amount_negative_or_zero(self):
+        """Should raise ArgumentTypeError if input is 0 or less."""
+        with self.assertRaises(argparse.ArgumentTypeError) as ctx:
+            parse_amount("0")
+        self.assertEqual(str(ctx.exception), "Amount must be greater than zero.")
+
+        with self.assertRaises(argparse.ArgumentTypeError):
+            parse_amount("-5.25")
+
+    def test_parse_amount_too_many_decimals(self):
+        """Should raise InvalidOperation if there are more than 2 decimal places."""
+        with self.assertRaises(decimal.InvalidOperation) as ctx:
+            parse_amount("12.555")
+        self.assertEqual(str(ctx.exception), "amount cannot have more than 2 decimal places.")
+
+    # ==========================================
+    # 5. TESTS FOR parse_description
+    # ==========================================
+
+    def test_parse_description_valid(self):
+        """Should return the cleaned up, stripped string description."""
+        self.assertEqual(parse_description("  Lunch item  "), "Lunch item")
+
+    def test_parse_description_empty(self):
+        """Should raise ArgumentTypeError if the input description is empty or whitespace."""
+        with self.assertRaises(argparse.ArgumentTypeError) as ctx:
+            parse_description("   ")
+        self.assertEqual(str(ctx.exception), "Description can not be empty.")
+
+    # ==========================================
+    # 6. TESTS FOR generate_id
+    # ==========================================
+
+    def test_generate_id_empty_list(self):
+        """Should return 1 if there are no existing expenses."""
+        self.assertEqual(generate_id([]), 1)
+
+    def test_generate_id_increment(self):
+        """Should look up the maximum ID present and increment it by 1."""
+        mock_expenses = [
+            {"id": 1, "description": "Coffee"},
+            {"id": 4, "description": "Gas"},
+            {"id": 2, "description": "Snack"}
+        ]
+        self.assertEqual(generate_id(mock_expenses), 5)
+
+    # ==========================================
+    # 7. TESTS FOR add_expense
+    # ==========================================
+
+    @patch("expense_tracker.datetime")
+    def test_add_expense_appends_correctly(self, mock_datetime):
+        """Should build an expense dict, set match times, and append to the list."""
+        fixed_now = datetime(2026, 10, 13, 13, 30, 0)
+        mock_datetime.now.return_value = fixed_now
+
+        expenses_list = []
+        target_amount = decimal.Decimal("45.00")
+        
+        result = add_expense(expenses_list, "Groceries", target_amount)
+
+        expected_expense = {
+            "id": 1,
+            "description": "Groceries",
+            "amount": target_amount,
+            "created_at": fixed_now,
+            "updated_at": fixed_now
+        }
+
+        self.assertEqual(result, expected_expense)
+        self.assertEqual(len(expenses_list), 1)
+        self.assertEqual(expenses_list[0], expected_expense)
 
 
 if __name__ == "__main__":
-    # Suppress your file's top-level print evaluations during module import
     with patch("builtins.open", mock_open(read_data="")), patch("sys.stderr.write"):
         unittest.main()

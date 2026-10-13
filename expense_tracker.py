@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-import decimal, json, sys, os
+import decimal, json, sys, os, argparse
 
 FILENAME = Path(__file__).parent / ".expenses-data" / "expenses.json"
 REQUIRED_KEYS = ("id", "description", "amount", "created_at", "updated_at")
@@ -189,4 +189,42 @@ def save_expenses(expenses, filename=FILENAME):
         # Safely attempts to delete the file. If it's already missing, it ignores the error.
         temp_file.unlink(missing_ok=True)
         sys.exit(1)
+
+def parse_amount(input_amount):
+    try:
+        input_amount = decimal.Decimal(input_amount)
+    except decimal.InvalidOperation:
+        raise argparse.ArgumentTypeError("Amount must be a number.")
+    if not input_amount.is_finite():
+        raise argparse.ArgumentTypeError("Amount must be a finite number.")
+    if input_amount <= 0 :
+        raise argparse.ArgumentTypeError("Amount must be greater than zero.")
+    if input_amount.as_tuple().exponent < -2:
+        raise decimal.InvalidOperation("amount cannot have more than 2 decimal places.")
+    return input_amount
+
+def parse_description(input_text):
+    description = input_text.strip()
+    if not description:
+        raise argparse.ArgumentTypeError("Description can not be empty.")
+    return description
+
+def generate_id(expenses):
+    highest_id = max((expense['id'] for expense in expenses), default=0)
+    return highest_id + 1
+
+def add_expense(expenses, description, amount):
+    created_at = datetime.now()
+    new_expense = {
+            "id": generate_id(expenses),
+            "description": description,
+            "amount": amount,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+    expenses.append(new_expense)
+    return new_expense
+
+print(generate_id([]))
+
 
