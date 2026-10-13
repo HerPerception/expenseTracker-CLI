@@ -1,16 +1,8 @@
 from datetime import datetime
-import json, sys, decimal
+from pathlib import Path
+import decimal, json, sys, os
 
-FILENAME = "expenses.json"
-
-# def parse_expense(expense):
-#     amount = expense["amount"]
-#     try:
-#         amount = decimal.Decimal(amount)
-#         expense["amount"] = amount
-#     except decimal.InvalidOperation:
-#         raise
-   
+FILENAME = Path(__file__).parent / ".expenses-data" / "expenses.json"
 REQUIRED_KEYS = ("id", "description", "amount", "created_at", "updated_at")
 
 
@@ -18,16 +10,19 @@ def parse_expense(expense):
     for key in REQUIRED_KEYS:
         if key not in expense:
             raise KeyError(key)
-
+    amount = decimal.Decimal(expense["amount"])
+    if not amount.is_finite():
+        raise decimal.InvalidOperation("amount must be a finite number.")
     return {
         "id": expense["id"],
         "description": expense["description"],
-        "amount": decimal.Decimal(expense["amount"]),
+        "amount": amount,
         "created_at": datetime.fromisoformat(expense["created_at"]),
         "updated_at": datetime.fromisoformat(expense["updated_at"]),
     }
    
-def load_expenses(filename):
+def load_expenses(filename=FILENAME):
+    
     try:
         with open(filename, 'r', encoding="utf-8") as file:
             file_content = file.read()
@@ -68,9 +63,130 @@ def load_expenses(filename):
             print(f"Expense {label} has an invalid datetime value: {e}", file=sys.stderr)
             sys.exit(1)
         except TypeError as e:
-            print(f"has a value of the wrong type: {e}", file=sys.stderr)
+            print(f"Expense {label} value has the wrong type: {e}", file=sys.stderr)
             sys.exit(1)
 
     return parsed_expenses
 
-print(load_expenses(FILENAME))
+
+def save_expenses(expenses, filename=FILENAME):
+    updated_expenses = []
+    for expense in expenses:
+        new_expense = {
+            "id": expense["id"],
+            "description": expense["description"],
+            "amount": str(expense["amount"]),
+            "created_at": expense["created_at"].isoformat(),
+            "updated_at": expense["updated_at"].isoformat(),
+        }
+        updated_expenses.append(new_expense)
+
+    filepath = Path(filename)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = filepath.with_suffix(filepath.suffix + ".tmp")
+    try:
+        with open(temp_file, "w", encoding="utf-8") as file:
+            json.dump(updated_expenses, file, indent=4)
+            os.replace(temp_file, filepath)
+    except OSError as e:
+        print(f"Error: Failed to save expenses to {filepath} due to an error: {e}", file=sys.stderr)
+        # Safely attempts to delete the file. If it's already missing, it ignores the error.
+        temp_file.unlink(missing_ok=True)
+        sys.exit(1)
+
+from datetime import datetime
+from pathlib import Path
+import decimal, json, sys, os
+
+FILENAME = Path(__file__).parent / ".expenses-data" / "expenses.json"
+REQUIRED_KEYS = ("id", "description", "amount", "created_at", "updated_at")
+
+
+def parse_expense(expense):
+    for key in REQUIRED_KEYS:
+        if key not in expense:
+            raise KeyError(key)
+    amount = decimal.Decimal(expense["amount"])
+    if not amount.is_finite():
+        raise decimal.InvalidOperation("amount must be a finite number.")
+    return {
+        "id": expense["id"],
+        "description": expense["description"],
+        "amount": amount,
+        "created_at": datetime.fromisoformat(expense["created_at"]),
+        "updated_at": datetime.fromisoformat(expense["updated_at"]),
+    }
+   
+def load_expenses(filename=FILENAME):
+    
+    try:
+        with open(filename, 'r', encoding="utf-8") as file:
+            file_content = file.read()
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        print(f"Error. File may have no read permission or there's a problem with the file.: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if len(file_content.strip()) == 0:
+        return []
+    try:
+        expenses = json.loads(file_content)
+    except json.JSONDecodeError as e:
+        print(f"Error: {filename} may contain invalid json: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    if not isinstance(expenses, list):
+        print(f"Expected type=list for file: {filename}, got {type(expenses).__name__}", file=sys.stderr)
+        sys.exit(1)
+    all_valid_dicts = all(isinstance(expense, dict) for expense in expenses)
+    if not all_valid_dicts:
+        print(f"{filename} should be a list of dictionaries. One or more expenses are not valid dictionaries.", file=sys.stderr)
+        sys.exit(1)
+
+    parsed_expenses = []
+    for position, each_expense in enumerate(expenses, start=1):
+        label = each_expense.get("id", f"at position {position}")
+        try:
+            parsed_expenses.append(parse_expense(each_expense))
+        except KeyError as e:
+            print(f"Expense {label} is missing a key: {e}", file=sys.stderr)
+            sys.exit(1)
+        except decimal.InvalidOperation as e:
+            print(f"Expense {label} has an invalid amount: {e}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as e:
+            print(f"Expense {label} has an invalid datetime value: {e}", file=sys.stderr)
+            sys.exit(1)
+        except TypeError as e:
+            print(f"Expense {label} value has the wrong type: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    return parsed_expenses
+
+
+def save_expenses(expenses, filename=FILENAME):
+    updated_expenses = []
+    for expense in expenses:
+        new_expense = {
+            "id": expense["id"],
+            "description": expense["description"],
+            "amount": str(expense["amount"]),
+            "created_at": expense["created_at"].isoformat(),
+            "updated_at": expense["updated_at"].isoformat(),
+        }
+        updated_expenses.append(new_expense)
+
+    filepath = Path(filename)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = filepath.with_suffix(filepath.suffix + ".tmp")
+    try:
+        with open(temp_file, "w", encoding="utf-8") as file:
+            json.dump(updated_expenses, file, indent=4)
+            os.replace(temp_file, filepath)
+    except OSError as e:
+        print(f"Error: Failed to save expenses to {filepath} due to an error: {e}", file=sys.stderr)
+        # Safely attempts to delete the file. If it's already missing, it ignores the error.
+        temp_file.unlink(missing_ok=True)
+        sys.exit(1)
+

@@ -44,3 +44,12 @@ parser.add_argument(
 arg = parser.parse_args()
 print(arg.month)
 
+
+# def parse_expense(expense):
+#     amount = expense["amount"]
+#     try:
+#         amount = decimal.Decimal(amount)
+#         expense["amount"] = amount
+#     except decimal.InvalidOperation:
+#         raise
+
